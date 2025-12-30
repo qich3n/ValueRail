@@ -1,0 +1,25 @@
+# Development Docker Compose configuration
+# Uses SQLite for quick local development without PostgreSQL
+
+version: '3.8'
+
+services:
+  valuerail:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: valuerail-dev
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite:///./valuerail.db
+      - DEBUG=true
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
