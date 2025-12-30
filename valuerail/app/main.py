@@ -1,5 +1,6 @@
 """ValueRail - Digital Value Settlement and Ledger System."""
 
+import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,6 +9,21 @@ from fastapi.responses import JSONResponse
 from app.config import get_settings
 from app.database import init_db
 from app.api import api_router
+from app.services.exceptions import (
+    ValueRailError,
+    AccountNotFoundError,
+    InsufficientBalanceError,
+    InvalidTransferError,
+    DuplicateAccountError,
+    IdempotencyKeyExistsError,
+)
+
+# Configure logging
+logging.basicConfig(
+    level=logging.DEBUG if get_settings().debug else logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
@@ -16,9 +32,16 @@ settings = get_settings()
 async def lifespan(app: FastAPI):
     """Lifespan context manager for startup/shutdown events."""
     # Startup: Initialize database
-    init_db()
+    logger.info("Starting ValueRail application...")
+    try:
+        init_db()
+        logger.info("Database initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}", exc_info=True)
+        raise
     yield
     # Shutdown: cleanup if needed
+    logger.info("Shutting down ValueRail application...")
 
 
 # Create FastAPI application
@@ -52,23 +75,125 @@ app = FastAPI(
 )
 
 # Add CORS middleware
+# Configure via CORS_ORIGINS environment variable (comma-separated)
+# e.g., CORS_ORIGINS=http://localhost:3000,https://example.com
+# Use "*" for development (default)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.get_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
+# Custom exception handlers for ValueRail errors
+@app.exception_handler(AccountNotFoundError)
+async def account_not_found_handler(request: Request, exc: AccountNotFoundError):
+    """Handle account not found errors."""
+    logger.warning(f"Account not found: {exc.account_id}")
+    return JSONResponse(
+        status_code=404,
+        content={
+            "error": "account_not_found",
+            "message": str(exc),
+            "account_id": exc.account_id
+        }
+    )
+
+
+@app.exception_handler(InsufficientBalanceError)
+async def insufficient_balance_handler(request: Request, exc: InsufficientBalanceError):
+    """Handle insufficient balance errors."""
+    logger.warning(
+        f"Insufficient balance: account={exc.account_id}, "
+        f"available={exc.available}, required={exc.required}"
+    )
+    return JSONResponse(
+        status_code=400,
+        content={
+            "error": "insufficient_balance",
+            "message": str(exc),
+            "account_id": exc.account_id,
+            "available": exc.available,
+            "required": exc.required
+        }
+    )
+
+
+@app.exception_handler(InvalidTransferError)
+async def invalid_transfer_handler(request: Request, exc: InvalidTransferError):
+    """Handle invalid transfer errors."""
+    logger.warning(f"Invalid transfer: {str(exc)}")
+    return JSONResponse(
+        status_code=400,
+        content={
+            "error": "invalid_transfer",
+            "message": str(exc)
+        }
+    )
+
+
+@app.exception_handler(DuplicateAccountError)
+async def duplicate_account_handler(request: Request, exc: DuplicateAccountError):
+    """Handle duplicate account errors."""
+    logger.warning(f"Duplicate account: {exc.account_id}")
+    return JSONResponse(
+        status_code=409,
+        content={
+            "error": "duplicate_account",
+            "message": str(exc),
+            "account_id": exc.account_id
+        }
+    )
+
+
+@app.exception_handler(IdempotencyKeyExistsError)
+async def idempotency_key_exists_handler(request: Request, exc: IdempotencyKeyExistsError):
+    """Handle idempotency key already exists errors."""
+    logger.info(f"Idempotency key already exists: {exc.key}")
+    # Return the cached response with 200 status
+    import json
+    try:
+        response_data = json.loads(exc.response) if isinstance(exc.response, str) else exc.response
+        return JSONResponse(status_code=200, content=response_data)
+    except (json.JSONDecodeError, TypeError):
+        return JSONResponse(
+            status_code=409,
+            content={
+                "error": "idempotency_key_exists",
+                "message": str(exc),
+                "key": exc.key
+            }
+        )
+
+
+@app.exception_handler(ValueRailError)
+async def valuerail_error_handler(request: Request, exc: ValueRailError):
+    """Handle generic ValueRail errors."""
+    logger.error(f"ValueRail error: {str(exc)}", exc_info=True)
+    return JSONResponse(
+        status_code=400,
+        content={
+            "error": "valuerail_error",
+            "message": str(exc)
+        }
+    )
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """Global exception handler for unhandled errors."""
+    logger.error(
+        f"Unhandled exception: {type(exc).__name__}: {str(exc)}",
+        exc_info=True,
+        extra={"path": request.url.path, "method": request.method}
+    )
     return JSONResponse(
         status_code=500,
         content={
             "error": "internal_server_error",
-            "message": "An unexpected error occurred"
+            "message": "An unexpected error occurred" if not settings.debug else str(exc)
         }
     )
 
