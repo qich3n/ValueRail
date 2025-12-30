@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  # ValueRail API Service
+  valuerail:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: valuerail-api
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://valuerail:valuerail_secret@postgres:5432/valuerail
+      - DEBUG=false
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - valuerail-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: valuerail-db
+    environment:
+      - POSTGRES_USER=valuerail
+      - POSTGRES_PASSWORD=valuerail_secret
+      - POSTGRES_DB=valuerail
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    networks:
+      - valuerail-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U valuerail -d valuerail"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  valuerail-network:
+    driver: bridge
