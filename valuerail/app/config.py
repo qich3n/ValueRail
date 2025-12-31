@@ -26,26 +26,8 @@ class Settings(BaseSettings):
     
     model_config = {
         "env_file": ".env",
-        "env_file_encoding": "utf-8",
-        "case_sensitive": False,
+        "env_file_encoding": "utf-8"
     }
-    
-    @field_validator("debug", mode="before")
-    @classmethod
-    def parse_debug(cls, v):
-        """Parse debug setting, handling non-boolean values gracefully."""
-        if isinstance(v, bool):
-            return v
-        if isinstance(v, str):
-            v_upper = v.upper()
-            # Only accept valid boolean strings, otherwise use default (False)
-            if v_upper in ("TRUE", "1", "YES", "ON"):
-                return True
-            elif v_upper in ("FALSE", "0", "NO", "OFF", ""):
-                return False
-            # If it's something else (like "WARN"), ignore it and use default
-            return False
-        return bool(v) if v is not None else False
     
     def get_cors_origins(self) -> List[str]:
         """Parse CORS origins from environment variable."""
