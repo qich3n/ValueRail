@@ -1,10 +1,12 @@
 """ValueRail - Digital Value Settlement and Ledger System."""
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
 from app.database import init_db
@@ -201,16 +203,31 @@ async def global_exception_handler(request: Request, exc: Exception):
 # Include API routes
 app.include_router(api_router, prefix="/api/v1")
 
+# Serve static files (frontend)
+try:
+    static_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")
+    if os.path.exists(static_dir):
+        app.mount("/static", StaticFiles(directory=static_dir), name="static")
+        logger.info(f"Serving static files from {static_dir}")
+except Exception as e:
+    logger.warning(f"Could not mount static files: {e}")
 
-# Root endpoint
+# Root endpoint - serve frontend if available
 @app.get("/")
 def root():
-    """Root endpoint with service information."""
+    """Root endpoint - serves frontend or API info."""
+    static_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")
+    index_file = os.path.join(static_dir, "index.html")
+    if os.path.exists(index_file):
+        return FileResponse(index_file)
+    
+    # Fallback to API info
     return {
         "service": settings.app_name,
         "version": settings.app_version,
         "docs": "/docs",
-        "health": "/api/v1/health"
+        "health": "/api/v1/health",
+        "frontend": "/static/index.html"
     }
 
 
