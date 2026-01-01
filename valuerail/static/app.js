@@ -94,13 +94,26 @@ async function loadDashboard() {
     }
 }
 
-// Update header stats
+// Update header stats from accounts only
+function updateHeaderStatsFromAccounts(accounts) {
+    const totalBalance = accounts.reduce((sum, acc) => sum + acc.balance, 0);
+    const accountsEl = document.getElementById('total-accounts');
+    const balanceEl = document.getElementById('total-balance');
+    
+    if (accountsEl) accountsEl.textContent = accounts.length;
+    if (balanceEl) balanceEl.textContent = `$${(totalBalance / 100).toFixed(2)}`;
+}
+
+// Update header stats from accounts and transactions
 function updateHeaderStats(accounts, transactions) {
     const totalBalance = accounts.reduce((sum, acc) => sum + acc.balance, 0);
+    const accountsEl = document.getElementById('total-accounts');
+    const balanceEl = document.getElementById('total-balance');
+    const transactionsEl = document.getElementById('total-transactions');
     
-    document.getElementById('total-accounts').textContent = accounts.length;
-    document.getElementById('total-balance').textContent = `$${(totalBalance / 100).toFixed(2)}`;
-    document.getElementById('total-transactions').textContent = transactions.length;
+    if (accountsEl) accountsEl.textContent = accounts.length;
+    if (balanceEl) balanceEl.textContent = `$${(totalBalance / 100).toFixed(2)}`;
+    if (transactionsEl) transactionsEl.textContent = transactions.length;
 }
 
 // Update dashboard stats
@@ -184,20 +197,29 @@ function showTopAccounts(accounts) {
 // Load accounts
 async function loadAccounts() {
     const listEl = document.getElementById('accounts-list');
-    listEl.innerHTML = '<div class="loading">Loading accounts...</div>';
+    if (listEl) {
+        listEl.innerHTML = '<div class="loading">Loading accounts...</div>';
+    }
     
     try {
         const accounts = await apiCall('/accounts');
         allAccounts = accounts;
         
-        if (accounts.length === 0) {
-            listEl.innerHTML = '<div class="empty-state">No accounts yet. Create one to get started!</div>';
-            return;
-        }
+        // Update header stats
+        updateHeaderStatsFromAccounts(accounts);
         
-        displayAccounts(accounts);
+        if (listEl) {
+            if (accounts.length === 0) {
+                listEl.innerHTML = '<div class="empty-state">No accounts yet. Create one to get started!</div>';
+                return;
+            }
+            
+            displayAccounts(accounts);
+        }
     } catch (error) {
-        listEl.innerHTML = `<div class="empty-state">Error: ${error.message}</div>`;
+        if (listEl) {
+            listEl.innerHTML = `<div class="empty-state">Error: ${error.message}</div>`;
+        }
         showNotification(`Failed to load accounts: ${error.message}`, 'error');
     }
 }
@@ -256,8 +278,9 @@ async function createAccount(event) {
         const account = await apiCall('/accounts', 'POST', { name });
         showNotification(`Account "${account.name}" created successfully!`, 'success');
         document.getElementById('create-account-form').reset();
-        loadAccounts();
+        await loadAccounts();
         loadAccountOptions();
+        loadHeaderStats(); // Update header stats
         if (document.getElementById('dashboard-tab').classList.contains('active')) {
             loadDashboard();
         }
@@ -296,8 +319,9 @@ async function mintValue(event) {
         
         showNotification(`Successfully minted $${(amount / 100).toFixed(2)} to account!`, 'success');
         document.getElementById('mint-form').reset();
-        loadAccounts();
+        await loadAccounts();
         loadAccountOptions();
+        loadHeaderStats(); // Update header stats
         if (document.getElementById('dashboard-tab').classList.contains('active')) {
             loadDashboard();
         }
@@ -343,9 +367,10 @@ async function transferValue(event) {
         
         showNotification(`Successfully transferred $${(amount / 100).toFixed(2)}!`, 'success');
         document.getElementById('transfer-form').reset();
-        loadAccounts();
+        await loadAccounts();
         loadAccountOptions();
-        loadTransactions();
+        await loadTransactions();
+        loadHeaderStats(); // Update header stats
         if (document.getElementById('dashboard-tab').classList.contains('active')) {
             loadDashboard();
         }
@@ -360,21 +385,31 @@ async function transferValue(event) {
 // Load transactions
 async function loadTransactions() {
     const listEl = document.getElementById('transactions-list');
-    listEl.innerHTML = '<div class="loading">Loading transactions...</div>';
+    if (listEl) {
+        listEl.innerHTML = '<div class="loading">Loading transactions...</div>';
+    }
     
     try {
         const response = await apiCall('/transactions');
         const transactions = response.transactions || [];
         allTransactions = transactions;
         
-        if (transactions.length === 0) {
-            listEl.innerHTML = '<div class="empty-state">No transactions yet.</div>';
-            return;
-        }
+        // Update header stats
+        const transactionsEl = document.getElementById('total-transactions');
+        if (transactionsEl) transactionsEl.textContent = transactions.length;
         
-        displayTransactions(transactions);
+        if (listEl) {
+            if (transactions.length === 0) {
+                listEl.innerHTML = '<div class="empty-state">No transactions yet.</div>';
+                return;
+            }
+            
+            displayTransactions(transactions);
+        }
     } catch (error) {
-        listEl.innerHTML = `<div class="empty-state">Error: ${error.message}</div>`;
+        if (listEl) {
+            listEl.innerHTML = `<div class="empty-state">Error: ${error.message}</div>`;
+        }
         showNotification(`Failed to load transactions: ${error.message}`, 'error');
     }
 }
@@ -422,8 +457,39 @@ function filterTransactions() {
     displayTransactions(filtered);
 }
 
+// Load header stats on page load
+async function loadHeaderStats() {
+    try {
+        const [accounts, transactionsResponse] = await Promise.all([
+            apiCall('/accounts'),
+            apiCall('/transactions')
+        ]);
+        
+        const transactions = transactionsResponse.transactions || [];
+        updateHeaderStats(accounts, transactions);
+    } catch (error) {
+        console.error('Failed to load header stats:', error);
+        // Set default values on error
+        const accountsEl = document.getElementById('total-accounts');
+        const balanceEl = document.getElementById('total-balance');
+        const transactionsEl = document.getElementById('total-transactions');
+        
+        if (accountsEl) accountsEl.textContent = '0';
+        if (balanceEl) balanceEl.textContent = '$0.00';
+        if (transactionsEl) transactionsEl.textContent = '0';
+    }
+}
+
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
-    loadDashboard();
+    // Load header stats immediately
+    loadHeaderStats();
+    
+    // Load dashboard if on dashboard tab
+    if (document.getElementById('dashboard-tab').classList.contains('active')) {
+        loadDashboard();
+    }
+    
+    // Load account options for dropdowns
     loadAccountOptions();
 });
