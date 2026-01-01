@@ -9,30 +9,90 @@
 <body>
     <div class="container">
         <header>
-            <h1>💰 ValueRail</h1>
-            <p class="subtitle">Digital Value Settlement & Ledger System</p>
+            <div class="header-content">
+                <div class="logo">
+                    <span class="logo-icon">💰</span>
+                    <h1>ValueRail</h1>
+                </div>
+                <p class="subtitle">Digital Value Settlement & Ledger System</p>
+            </div>
+            <div class="header-stats" id="header-stats">
+                <div class="stat-card">
+                    <div class="stat-value" id="total-accounts">-</div>
+                    <div class="stat-label">Accounts</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="total-balance">$0.00</div>
+                    <div class="stat-label">Total Value</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="total-transactions">-</div>
+                    <div class="stat-label">Transactions</div>
+                </div>
+            </div>
         </header>
 
         <div class="tabs">
-            <button class="tab-button active" onclick="showTab('accounts')">Accounts</button>
-            <button class="tab-button" onclick="showTab('mint')">Mint</button>
-            <button class="tab-button" onclick="showTab('transfer')">Transfer</button>
-            <button class="tab-button" onclick="showTab('transactions')">Transactions</button>
+            <button class="tab-button active" onclick="showTab('dashboard')">
+                <span class="tab-icon">📊</span> Dashboard
+            </button>
+            <button class="tab-button" onclick="showTab('accounts')">
+                <span class="tab-icon">👤</span> Accounts
+            </button>
+            <button class="tab-button" onclick="showTab('mint')">
+                <span class="tab-icon">✨</span> Mint
+            </button>
+            <button class="tab-button" onclick="showTab('transfer')">
+                <span class="tab-icon">💸</span> Transfer
+            </button>
+            <button class="tab-button" onclick="showTab('transactions')">
+                <span class="tab-icon">📜</span> Transactions
+            </button>
+        </div>
+
+        <!-- Dashboard Tab -->
+        <div id="dashboard-tab" class="tab-content active">
+            <div class="dashboard-grid">
+                <div class="card dashboard-card">
+                    <h2>📈 Quick Stats</h2>
+                    <div class="stats-grid" id="dashboard-stats"></div>
+                </div>
+                <div class="card dashboard-card">
+                    <h2>⚡ Recent Transactions</h2>
+                    <div id="recent-transactions"></div>
+                </div>
+            </div>
+            <div class="card">
+                <h2>🏦 Top Accounts</h2>
+                <div id="top-accounts" class="accounts-grid"></div>
+            </div>
         </div>
 
         <!-- Accounts Tab -->
-        <div id="accounts-tab" class="tab-content active">
+        <div id="accounts-tab" class="tab-content">
             <div class="card">
-                <h2>Create New Account</h2>
+                <div class="card-header">
+                    <h2>Create New Account</h2>
+                </div>
                 <form id="create-account-form" onsubmit="createAccount(event)">
-                    <input type="text" id="account-name" placeholder="Account Name" required>
-                    <button type="submit">Create Account</button>
+                    <div class="form-group">
+                        <label for="account-name">Account Name</label>
+                        <input type="text" id="account-name" placeholder="Enter account name" required>
+                    </div>
+                    <button type="submit" class="btn-primary">
+                        <span>➕</span> Create Account
+                    </button>
                 </form>
             </div>
 
             <div class="card">
-                <h2>All Accounts</h2>
-                <button onclick="loadAccounts()" class="refresh-btn">🔄 Refresh</button>
+                <div class="card-header">
+                    <h2>All Accounts</h2>
+                    <div class="card-actions">
+                        <input type="text" id="account-search" placeholder="🔍 Search accounts..." oninput="filterAccounts()">
+                        <button onclick="loadAccounts()" class="btn-secondary">🔄 Refresh</button>
+                    </div>
+                </div>
                 <div id="accounts-list" class="accounts-grid"></div>
             </div>
         </div>
@@ -40,14 +100,29 @@
         <!-- Mint Tab -->
         <div id="mint-tab" class="tab-content">
             <div class="card">
-                <h2>Mint Value to Account</h2>
+                <div class="card-header">
+                    <h2>✨ Mint Value to Account</h2>
+                    <p class="card-description">Create new digital value and add it to an account</p>
+                </div>
                 <form id="mint-form" onsubmit="mintValue(event)">
-                    <select id="mint-account-id" required>
-                        <option value="">Select Account...</option>
-                    </select>
-                    <input type="number" id="mint-amount" placeholder="Amount (in cents, e.g., 10000 = $100.00)" min="1" required>
-                    <input type="text" id="mint-description" placeholder="Description" required>
-                    <button type="submit">Mint Value</button>
+                    <div class="form-group">
+                        <label for="mint-account-id">Select Account</label>
+                        <select id="mint-account-id" required>
+                            <option value="">Choose an account...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="mint-amount">Amount (in cents)</label>
+                        <input type="number" id="mint-amount" placeholder="e.g., 10000 = $100.00" min="1" required>
+                        <small>Enter amount in smallest unit (cents). 10000 = $100.00</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="mint-description">Description</label>
+                        <input type="text" id="mint-description" placeholder="Transaction description" required>
+                    </div>
+                    <button type="submit" class="btn-primary">
+                        <span>✨</span> Mint Value
+                    </button>
                 </form>
             </div>
         </div>
@@ -55,17 +130,36 @@
         <!-- Transfer Tab -->
         <div id="transfer-tab" class="tab-content">
             <div class="card">
-                <h2>Transfer Value Between Accounts</h2>
+                <div class="card-header">
+                    <h2>💸 Transfer Value Between Accounts</h2>
+                    <p class="card-description">Move digital value from one account to another</p>
+                </div>
                 <form id="transfer-form" onsubmit="transferValue(event)">
-                    <select id="from-account-id" required>
-                        <option value="">From Account...</option>
-                    </select>
-                    <select id="to-account-id" required>
-                        <option value="">To Account...</option>
-                    </select>
-                    <input type="number" id="transfer-amount" placeholder="Amount (in cents)" min="1" required>
-                    <input type="text" id="transfer-description" placeholder="Description" required>
-                    <button type="submit">Transfer</button>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="from-account-id">From Account</label>
+                            <select id="from-account-id" required>
+                                <option value="">Select source account...</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="to-account-id">To Account</label>
+                            <select id="to-account-id" required>
+                                <option value="">Select destination account...</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="transfer-amount">Amount (in cents)</label>
+                        <input type="number" id="transfer-amount" placeholder="Amount to transfer" min="1" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="transfer-description">Description</label>
+                        <input type="text" id="transfer-description" placeholder="Transaction description" required>
+                    </div>
+                    <button type="submit" class="btn-primary">
+                        <span>💸</span> Transfer Value
+                    </button>
                 </form>
             </div>
         </div>
@@ -73,8 +167,17 @@
         <!-- Transactions Tab -->
         <div id="transactions-tab" class="tab-content">
             <div class="card">
-                <h2>Transaction History</h2>
-                <button onclick="loadTransactions()" class="refresh-btn">🔄 Refresh</button>
+                <div class="card-header">
+                    <h2>📜 Transaction History</h2>
+                    <div class="card-actions">
+                        <select id="transaction-filter" onchange="filterTransactions()">
+                            <option value="all">All Transactions</option>
+                            <option value="MINT">Mint Only</option>
+                            <option value="TRANSFER">Transfer Only</option>
+                        </select>
+                        <button onclick="loadTransactions()" class="btn-secondary">🔄 Refresh</button>
+                    </div>
+                </div>
                 <div id="transactions-list"></div>
             </div>
         </div>
@@ -86,4 +189,3 @@
     <script src="/static/app.js"></script>
 </body>
 </html>
-

@@ -1,4 +1,6 @@
 const API_BASE = '/api/v1';
+let allAccounts = [];
+let allTransactions = [];
 
 // Tab switching
 function showTab(tabName) {
@@ -15,7 +17,9 @@ function showTab(tabName) {
     event.target.classList.add('active');
     
     // Load data when switching to certain tabs
-    if (tabName === 'accounts') {
+    if (tabName === 'dashboard') {
+        loadDashboard();
+    } else if (tabName === 'accounts') {
         loadAccounts();
     } else if (tabName === 'transactions') {
         loadTransactions();
@@ -32,7 +36,7 @@ function showNotification(message, type = 'info') {
     
     setTimeout(() => {
         notification.classList.remove('show');
-    }, 3000);
+    }, 4000);
 }
 
 // API helper
@@ -62,6 +66,121 @@ async function apiCall(endpoint, method = 'GET', body = null) {
     }
 }
 
+// Load dashboard
+async function loadDashboard() {
+    try {
+        const [accounts, transactionsResponse] = await Promise.all([
+            apiCall('/accounts'),
+            apiCall('/transactions')
+        ]);
+        
+        const transactions = transactionsResponse.transactions || [];
+        allAccounts = accounts;
+        allTransactions = transactions;
+        
+        // Update header stats
+        updateHeaderStats(accounts, transactions);
+        
+        // Update dashboard stats
+        updateDashboardStats(accounts, transactions);
+        
+        // Show recent transactions
+        showRecentTransactions(transactions.slice(0, 5));
+        
+        // Show top accounts
+        showTopAccounts(accounts);
+    } catch (error) {
+        showNotification(`Failed to load dashboard: ${error.message}`, 'error');
+    }
+}
+
+// Update header stats
+function updateHeaderStats(accounts, transactions) {
+    const totalBalance = accounts.reduce((sum, acc) => sum + acc.balance, 0);
+    
+    document.getElementById('total-accounts').textContent = accounts.length;
+    document.getElementById('total-balance').textContent = `$${(totalBalance / 100).toFixed(2)}`;
+    document.getElementById('total-transactions').textContent = transactions.length;
+}
+
+// Update dashboard stats
+function updateDashboardStats(accounts, transactions) {
+    const totalBalance = accounts.reduce((sum, acc) => sum + acc.balance, 0);
+    const mintCount = transactions.filter(tx => tx.type === 'MINT').length;
+    const transferCount = transactions.filter(tx => tx.type === 'TRANSFER').length;
+    const totalMinted = transactions
+        .filter(tx => tx.type === 'MINT')
+        .reduce((sum, tx) => sum + tx.amount, 0);
+    
+    const statsEl = document.getElementById('dashboard-stats');
+    statsEl.innerHTML = `
+        <div class="stat-item">
+            <div class="stat-item-value">${accounts.length}</div>
+            <div class="stat-item-label">Total Accounts</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-item-value">$${(totalBalance / 100).toFixed(2)}</div>
+            <div class="stat-item-label">Total Value</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-item-value">${mintCount}</div>
+            <div class="stat-item-label">Mint Operations</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-item-value">${transferCount}</div>
+            <div class="stat-item-label">Transfers</div>
+        </div>
+    `;
+}
+
+// Show recent transactions
+function showRecentTransactions(transactions) {
+    const el = document.getElementById('recent-transactions');
+    
+    if (transactions.length === 0) {
+        el.innerHTML = '<div class="empty-state">No transactions yet</div>';
+        return;
+    }
+    
+    el.innerHTML = transactions.map(tx => {
+        const amount = `$${(tx.amount / 100).toFixed(2)}`;
+        const txClass = tx.type === 'MINT' ? 'mint' : 'transfer';
+        const typeLabel = tx.type === 'MINT' ? 'MINT' : 'TRANSFER';
+        
+        return `
+            <div class="transaction-item ${txClass}">
+                <div class="transaction-header">
+                    <span class="transaction-type">${typeLabel}</span>
+                    <span class="transaction-amount">${amount}</span>
+                </div>
+                <div class="transaction-details">
+                    ${tx.description || 'No description'}<br>
+                    <small>${new Date(tx.created_at).toLocaleString()}</small>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Show top accounts
+function showTopAccounts(accounts) {
+    const sorted = [...accounts].sort((a, b) => b.balance - a.balance).slice(0, 3);
+    const el = document.getElementById('top-accounts');
+    
+    if (sorted.length === 0) {
+        el.innerHTML = '<div class="empty-state">No accounts yet</div>';
+        return;
+    }
+    
+    el.innerHTML = sorted.map(account => `
+        <div class="account-card">
+            <h3>${account.name}</h3>
+            <div class="account-id">ID: ${account.id.substring(0, 20)}...</div>
+            <div class="balance">${(account.balance / 100).toFixed(2)}</div>
+        </div>
+    `).join('');
+}
+
 // Load accounts
 async function loadAccounts() {
     const listEl = document.getElementById('accounts-list');
@@ -69,29 +188,47 @@ async function loadAccounts() {
     
     try {
         const accounts = await apiCall('/accounts');
+        allAccounts = accounts;
         
         if (accounts.length === 0) {
             listEl.innerHTML = '<div class="empty-state">No accounts yet. Create one to get started!</div>';
             return;
         }
         
-        listEl.innerHTML = accounts.map(account => `
-            <div class="account-card">
-                <h3>${account.name}</h3>
-                <div class="account-id">ID: ${account.id}</div>
-                <div class="balance">Balance: $${(account.balance / 100).toFixed(2)}</div>
-            </div>
-        `).join('');
+        displayAccounts(accounts);
     } catch (error) {
         listEl.innerHTML = `<div class="empty-state">Error: ${error.message}</div>`;
         showNotification(`Failed to load accounts: ${error.message}`, 'error');
     }
 }
 
+// Display accounts
+function displayAccounts(accounts) {
+    const listEl = document.getElementById('accounts-list');
+    listEl.innerHTML = accounts.map(account => `
+        <div class="account-card">
+            <h3>${account.name}</h3>
+            <div class="account-id">ID: ${account.id}</div>
+            <div class="balance">${(account.balance / 100).toFixed(2)}</div>
+        </div>
+    `).join('');
+}
+
+// Filter accounts
+function filterAccounts() {
+    const searchTerm = document.getElementById('account-search').value.toLowerCase();
+    const filtered = allAccounts.filter(acc => 
+        acc.name.toLowerCase().includes(searchTerm) ||
+        acc.id.toLowerCase().includes(searchTerm)
+    );
+    displayAccounts(filtered);
+}
+
 // Load account options for dropdowns
 async function loadAccountOptions() {
     try {
         const accounts = await apiCall('/accounts');
+        allAccounts = accounts;
         
         const options = accounts.map(acc => 
             `<option value="${acc.id}">${acc.name} ($${(acc.balance / 100).toFixed(2)})</option>`
@@ -109,6 +246,11 @@ async function loadAccountOptions() {
 async function createAccount(event) {
     event.preventDefault();
     const name = document.getElementById('account-name').value;
+    const button = event.target.querySelector('button[type="submit"]');
+    const originalText = button.innerHTML;
+    
+    button.innerHTML = '<span>⏳</span> Creating...';
+    button.disabled = true;
     
     try {
         const account = await apiCall('/accounts', 'POST', { name });
@@ -116,8 +258,14 @@ async function createAccount(event) {
         document.getElementById('create-account-form').reset();
         loadAccounts();
         loadAccountOptions();
+        if (document.getElementById('dashboard-tab').classList.contains('active')) {
+            loadDashboard();
+        }
     } catch (error) {
         showNotification(`Failed to create account: ${error.message}`, 'error');
+    } finally {
+        button.innerHTML = originalText;
+        button.disabled = false;
     }
 }
 
@@ -127,11 +275,16 @@ async function mintValue(event) {
     const accountId = document.getElementById('mint-account-id').value;
     const amount = parseInt(document.getElementById('mint-amount').value);
     const description = document.getElementById('mint-description').value;
+    const button = event.target.querySelector('button[type="submit"]');
+    const originalText = button.innerHTML;
     
     if (!accountId) {
         showNotification('Please select an account', 'error');
         return;
     }
+    
+    button.innerHTML = '<span>⏳</span> Minting...';
+    button.disabled = true;
     
     try {
         const transaction = await apiCall('/transactions/mint', 'POST', {
@@ -145,8 +298,14 @@ async function mintValue(event) {
         document.getElementById('mint-form').reset();
         loadAccounts();
         loadAccountOptions();
+        if (document.getElementById('dashboard-tab').classList.contains('active')) {
+            loadDashboard();
+        }
     } catch (error) {
         showNotification(`Failed to mint: ${error.message}`, 'error');
+    } finally {
+        button.innerHTML = originalText;
+        button.disabled = false;
     }
 }
 
@@ -157,6 +316,8 @@ async function transferValue(event) {
     const toAccountId = document.getElementById('to-account-id').value;
     const amount = parseInt(document.getElementById('transfer-amount').value);
     const description = document.getElementById('transfer-description').value;
+    const button = event.target.querySelector('button[type="submit"]');
+    const originalText = button.innerHTML;
     
     if (!fromAccountId || !toAccountId) {
         showNotification('Please select both accounts', 'error');
@@ -167,6 +328,9 @@ async function transferValue(event) {
         showNotification('Cannot transfer to the same account', 'error');
         return;
     }
+    
+    button.innerHTML = '<span>⏳</span> Transferring...';
+    button.disabled = true;
     
     try {
         const transaction = await apiCall('/transactions/transfer', 'POST', {
@@ -182,8 +346,14 @@ async function transferValue(event) {
         loadAccounts();
         loadAccountOptions();
         loadTransactions();
+        if (document.getElementById('dashboard-tab').classList.contains('active')) {
+            loadDashboard();
+        }
     } catch (error) {
         showNotification(`Failed to transfer: ${error.message}`, 'error');
+    } finally {
+        button.innerHTML = originalText;
+        button.disabled = false;
     }
 }
 
@@ -195,47 +365,65 @@ async function loadTransactions() {
     try {
         const response = await apiCall('/transactions');
         const transactions = response.transactions || [];
+        allTransactions = transactions;
         
         if (transactions.length === 0) {
             listEl.innerHTML = '<div class="empty-state">No transactions yet.</div>';
             return;
         }
         
-        listEl.innerHTML = transactions.map(tx => {
-            const amount = `$${(tx.amount / 100).toFixed(2)}`;
-            const txClass = tx.type === 'MINT' ? 'mint' : 'transfer';
-            const typeLabel = tx.type === 'MINT' ? 'MINT' : 'TRANSFER';
-            
-            let details = '';
-            if (tx.type === 'MINT') {
-                details = `To: ${tx.to_account_id ? tx.to_account_id.substring(0, 8) + '...' : 'N/A'}`;
-            } else {
-                details = `From: ${tx.from_account_id ? tx.from_account_id.substring(0, 8) + '...' : 'N/A'} → To: ${tx.to_account_id ? tx.to_account_id.substring(0, 8) + '...' : 'N/A'}`;
-            }
-            
-            return `
-                <div class="transaction-item ${txClass}">
-                    <div class="transaction-header">
-                        <span class="transaction-type">${typeLabel}</span>
-                        <span class="transaction-amount">${amount}</span>
-                    </div>
-                    <div class="transaction-details">
-                        ${tx.description || 'No description'}<br>
-                        ${details}<br>
-                        <small>${new Date(tx.created_at).toLocaleString()}</small>
-                    </div>
-                </div>
-            `;
-        }).join('');
+        displayTransactions(transactions);
     } catch (error) {
         listEl.innerHTML = `<div class="empty-state">Error: ${error.message}</div>`;
         showNotification(`Failed to load transactions: ${error.message}`, 'error');
     }
 }
 
+// Display transactions
+function displayTransactions(transactions) {
+    const listEl = document.getElementById('transactions-list');
+    listEl.innerHTML = transactions.map(tx => {
+        const amount = `$${(tx.amount / 100).toFixed(2)}`;
+        const txClass = tx.type === 'MINT' ? 'mint' : 'transfer';
+        const typeLabel = tx.type === 'MINT' ? 'MINT' : 'TRANSFER';
+        
+        let details = '';
+        if (tx.type === 'MINT') {
+            details = `To: ${tx.to_account_id ? tx.to_account_id.substring(0, 12) + '...' : 'N/A'}`;
+        } else {
+            details = `From: ${tx.from_account_id ? tx.from_account_id.substring(0, 12) + '...' : 'N/A'} → To: ${tx.to_account_id ? tx.to_account_id.substring(0, 12) + '...' : 'N/A'}`;
+        }
+        
+        return `
+            <div class="transaction-item ${txClass}">
+                <div class="transaction-header">
+                    <span class="transaction-type">${typeLabel}</span>
+                    <span class="transaction-amount">${amount}</span>
+                </div>
+                <div class="transaction-details">
+                    ${tx.description || 'No description'}<br>
+                    ${details}<br>
+                    <small>${new Date(tx.created_at).toLocaleString()}</small>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Filter transactions
+function filterTransactions() {
+    const filter = document.getElementById('transaction-filter').value;
+    let filtered = allTransactions;
+    
+    if (filter !== 'all') {
+        filtered = allTransactions.filter(tx => tx.type === filter);
+    }
+    
+    displayTransactions(filtered);
+}
+
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
-    loadAccounts();
+    loadDashboard();
     loadAccountOptions();
 });
-
