@@ -14,7 +14,7 @@ function showTab(tabName) {
     
     // Show selected tab
     document.getElementById(`${tabName}-tab`).classList.add('active');
-    event.target.classList.add('active');
+    event.target.closest('.tab-button').classList.add('active');
     
     // Load data when switching to certain tabs
     if (tabName === 'dashboard') {
@@ -37,6 +37,25 @@ function showNotification(message, type = 'info') {
     setTimeout(() => {
         notification.classList.remove('show');
     }, 4000);
+}
+
+// Copy to clipboard
+function copyToClipboard(elementId) {
+    const element = document.getElementById(elementId);
+    const text = element.textContent;
+    
+    navigator.clipboard.writeText(text).then(() => {
+        showNotification('Copied to clipboard!', 'success');
+    }).catch(() => {
+        // Fallback for older browsers
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        showNotification('Copied to clipboard!', 'success');
+    });
 }
 
 // API helper
@@ -111,9 +130,50 @@ function updateHeaderStats(accounts, transactions) {
     const balanceEl = document.getElementById('total-balance');
     const transactionsEl = document.getElementById('total-transactions');
     
-    if (accountsEl) accountsEl.textContent = accounts.length;
-    if (balanceEl) balanceEl.textContent = `$${(totalBalance / 100).toFixed(2)}`;
-    if (transactionsEl) transactionsEl.textContent = transactions.length;
+    if (accountsEl) {
+        animateValue(accountsEl, parseInt(accountsEl.textContent) || 0, accounts.length);
+    }
+    if (balanceEl) {
+        const current = parseFloat(balanceEl.textContent.replace('$', '')) || 0;
+        animateValue(balanceEl, current, totalBalance / 100, true);
+    }
+    if (transactionsEl) {
+        animateValue(transactionsEl, parseInt(transactionsEl.textContent) || 0, transactions.length);
+    }
+}
+
+// Animate value changes
+function animateValue(element, start, end, isCurrency = false) {
+    const duration = 500;
+    const startTime = performance.now();
+    
+    function update(currentTime) {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const current = start + (end - start) * easeOutCubic(progress);
+        
+        if (isCurrency) {
+            element.textContent = `$${current.toFixed(2)}`;
+        } else {
+            element.textContent = Math.round(current);
+        }
+        
+        if (progress < 1) {
+            requestAnimationFrame(update);
+        } else {
+            if (isCurrency) {
+                element.textContent = `$${end.toFixed(2)}`;
+            } else {
+                element.textContent = end;
+            }
+        }
+    }
+    
+    requestAnimationFrame(update);
+}
+
+function easeOutCubic(t) {
+    return 1 - Math.pow(1 - t, 3);
 }
 
 // Update dashboard stats
@@ -186,9 +246,14 @@ function showTopAccounts(accounts) {
     }
     
     el.innerHTML = sorted.map(account => `
-        <div class="account-card">
+        <div class="account-card" onclick="showAccountModal('${account.id}')">
             <h3>${account.name}</h3>
-            <div class="account-id">ID: ${account.id.substring(0, 20)}...</div>
+            <div class="account-id">
+                <span class="account-id-text">ID: ${account.id.substring(0, 20)}...</span>
+                <button class="btn-copy" onclick="event.stopPropagation(); copyToClipboard('account-id-${account.id}')" title="Copy ID">
+                    📋
+                </button>
+            </div>
             <div class="balance">${(account.balance / 100).toFixed(2)}</div>
         </div>
     `).join('');
@@ -228,9 +293,14 @@ async function loadAccounts() {
 function displayAccounts(accounts) {
     const listEl = document.getElementById('accounts-list');
     listEl.innerHTML = accounts.map(account => `
-        <div class="account-card">
+        <div class="account-card" onclick="showAccountModal('${account.id}')">
             <h3>${account.name}</h3>
-            <div class="account-id">ID: ${account.id}</div>
+            <div class="account-id">
+                <span class="account-id-text" id="account-id-${account.id}">${account.id}</span>
+                <button class="btn-copy" onclick="event.stopPropagation(); copyToClipboard('account-id-${account.id}')" title="Copy ID">
+                    📋
+                </button>
+            </div>
             <div class="balance">${(account.balance / 100).toFixed(2)}</div>
         </div>
     `).join('');
@@ -246,6 +316,63 @@ function filterAccounts() {
     displayAccounts(filtered);
 }
 
+// Show account modal
+async function showAccountModal(accountId) {
+    try {
+        const account = await apiCall(`/accounts/${accountId}`);
+        const balance = await apiCall(`/accounts/${accountId}/balance`);
+        const transactions = allTransactions.filter(tx => 
+            tx.from_account_id === accountId || tx.to_account_id === accountId
+        ).slice(0, 10);
+        
+        document.getElementById('modal-account-name').textContent = account.name;
+        document.getElementById('modal-account-id').textContent = account.id;
+        document.getElementById('modal-account-balance').textContent = `$${(balance.balance / 100).toFixed(2)}`;
+        document.getElementById('modal-account-created').textContent = new Date(account.created_at).toLocaleString();
+        
+        const modalTxEl = document.getElementById('modal-transactions');
+        if (transactions.length === 0) {
+            modalTxEl.innerHTML = '<div class="empty-state">No transactions for this account</div>';
+        } else {
+            modalTxEl.innerHTML = transactions.map(tx => {
+                const amount = `$${(tx.amount / 100).toFixed(2)}`;
+                const txClass = tx.type === 'MINT' ? 'mint' : 'transfer';
+                const typeLabel = tx.type === 'MINT' ? 'MINT' : 'TRANSFER';
+                
+                return `
+                    <div class="transaction-item ${txClass}">
+                        <div class="transaction-header">
+                            <span class="transaction-type">${typeLabel}</span>
+                            <span class="transaction-amount">${amount}</span>
+                        </div>
+                        <div class="transaction-details">
+                            ${tx.description || 'No description'}<br>
+                            <small>${new Date(tx.created_at).toLocaleString()}</small>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        document.getElementById('account-modal').classList.add('show');
+    } catch (error) {
+        showNotification(`Failed to load account details: ${error.message}`, 'error');
+    }
+}
+
+// Close account modal
+function closeAccountModal() {
+    document.getElementById('account-modal').classList.remove('show');
+}
+
+// Close modal on outside click
+document.addEventListener('click', (e) => {
+    const modal = document.getElementById('account-modal');
+    if (e.target === modal) {
+        closeAccountModal();
+    }
+});
+
 // Load account options for dropdowns
 async function loadAccountOptions() {
     try {
@@ -253,16 +380,70 @@ async function loadAccountOptions() {
         allAccounts = accounts;
         
         const options = accounts.map(acc => 
-            `<option value="${acc.id}">${acc.name} ($${(acc.balance / 100).toFixed(2)})</option>`
+            `<option value="${acc.id}" data-balance="${acc.balance}">${acc.name} ($${(acc.balance / 100).toFixed(2)})</option>`
         ).join('');
         
         document.getElementById('mint-account-id').innerHTML = '<option value="">Select Account...</option>' + options;
         document.getElementById('from-account-id').innerHTML = '<option value="">From Account...</option>' + options;
         document.getElementById('to-account-id').innerHTML = '<option value="">To Account...</option>' + options;
+        
+        updateTransferBalance();
     } catch (error) {
         showNotification(`Failed to load accounts: ${error.message}`, 'error');
     }
 }
+
+// Update transfer balance previews
+function updateTransferBalance() {
+    const fromId = document.getElementById('from-account-id').value;
+    const toId = document.getElementById('to-account-id').value;
+    
+    const fromBalanceEl = document.getElementById('from-balance');
+    const toBalanceEl = document.getElementById('to-balance');
+    
+    if (fromId) {
+        const account = allAccounts.find(acc => acc.id === fromId);
+        if (account && fromBalanceEl) {
+            fromBalanceEl.textContent = `Balance: $${(account.balance / 100).toFixed(2)}`;
+            fromBalanceEl.style.display = 'block';
+        }
+    } else if (fromBalanceEl) {
+        fromBalanceEl.style.display = 'none';
+    }
+    
+    if (toId) {
+        const account = allAccounts.find(acc => acc.id === toId);
+        if (account && toBalanceEl) {
+            toBalanceEl.textContent = `Balance: $${(account.balance / 100).toFixed(2)}`;
+            toBalanceEl.style.display = 'block';
+        }
+    } else if (toBalanceEl) {
+        toBalanceEl.style.display = 'none';
+    }
+}
+
+// Update amount displays
+function updateTransferAmount() {
+    const amount = parseInt(document.getElementById('transfer-amount').value) || 0;
+    const displayEl = document.getElementById('transfer-amount-display');
+    if (displayEl) {
+        displayEl.textContent = (amount / 100).toFixed(2);
+    }
+}
+
+// Update mint amount display
+document.addEventListener('DOMContentLoaded', () => {
+    const mintAmountInput = document.getElementById('mint-amount');
+    if (mintAmountInput) {
+        mintAmountInput.addEventListener('input', () => {
+            const amount = parseInt(mintAmountInput.value) || 0;
+            const displayEl = document.getElementById('mint-amount-display');
+            if (displayEl) {
+                displayEl.textContent = (amount / 100).toFixed(2);
+            }
+        });
+    }
+});
 
 // Create account
 async function createAccount(event) {
@@ -319,6 +500,7 @@ async function mintValue(event) {
         
         showNotification(`Successfully minted $${(amount / 100).toFixed(2)} to account!`, 'success');
         document.getElementById('mint-form').reset();
+        document.getElementById('mint-amount-display').textContent = '0.00';
         await loadAccounts();
         loadAccountOptions();
         loadHeaderStats(); // Update header stats
@@ -353,6 +535,12 @@ async function transferValue(event) {
         return;
     }
     
+    const fromAccount = allAccounts.find(acc => acc.id === fromAccountId);
+    if (fromAccount && amount > fromAccount.balance) {
+        showNotification(`Insufficient balance. Available: $${(fromAccount.balance / 100).toFixed(2)}`, 'error');
+        return;
+    }
+    
     button.innerHTML = '<span>⏳</span> Transferring...';
     button.disabled = true;
     
@@ -367,6 +555,9 @@ async function transferValue(event) {
         
         showNotification(`Successfully transferred $${(amount / 100).toFixed(2)}!`, 'success');
         document.getElementById('transfer-form').reset();
+        document.getElementById('transfer-amount-display').textContent = '0.00';
+        document.getElementById('from-balance').style.display = 'none';
+        document.getElementById('to-balance').style.display = 'none';
         await loadAccounts();
         loadAccountOptions();
         await loadTransactions();
@@ -396,7 +587,9 @@ async function loadTransactions() {
         
         // Update header stats
         const transactionsEl = document.getElementById('total-transactions');
-        if (transactionsEl) transactionsEl.textContent = transactions.length;
+        if (transactionsEl) {
+            animateValue(transactionsEl, parseInt(transactionsEl.textContent) || 0, transactions.length);
+        }
         
         if (listEl) {
             if (transactions.length === 0) {
@@ -417,20 +610,23 @@ async function loadTransactions() {
 // Display transactions
 function displayTransactions(transactions) {
     const listEl = document.getElementById('transactions-list');
-    listEl.innerHTML = transactions.map(tx => {
+    listEl.innerHTML = transactions.map((tx, index) => {
         const amount = `$${(tx.amount / 100).toFixed(2)}`;
         const txClass = tx.type === 'MINT' ? 'mint' : 'transfer';
         const typeLabel = tx.type === 'MINT' ? 'MINT' : 'TRANSFER';
         
         let details = '';
         if (tx.type === 'MINT') {
-            details = `To: ${tx.to_account_id ? tx.to_account_id.substring(0, 12) + '...' : 'N/A'}`;
+            const account = allAccounts.find(acc => acc.id === tx.to_account_id);
+            details = `To: ${account ? account.name : tx.to_account_id.substring(0, 12) + '...'}`;
         } else {
-            details = `From: ${tx.from_account_id ? tx.from_account_id.substring(0, 12) + '...' : 'N/A'} → To: ${tx.to_account_id ? tx.to_account_id.substring(0, 12) + '...' : 'N/A'}`;
+            const fromAccount = allAccounts.find(acc => acc.id === tx.from_account_id);
+            const toAccount = allAccounts.find(acc => acc.id === tx.to_account_id);
+            details = `From: ${fromAccount ? fromAccount.name : tx.from_account_id.substring(0, 12) + '...'} → To: ${toAccount ? toAccount.name : tx.to_account_id.substring(0, 12) + '...'}`;
         }
         
         return `
-            <div class="transaction-item ${txClass}">
+            <div class="transaction-item ${txClass}" style="animation-delay: ${index * 0.05}s">
                 <div class="transaction-header">
                     <span class="transaction-type">${typeLabel}</span>
                     <span class="transaction-amount">${amount}</span>
