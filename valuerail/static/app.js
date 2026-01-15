@@ -2,6 +2,27 @@ const API_BASE = '/api/v1';
 let allAccounts = [];
 let allTransactions = [];
 
+// Theme management
+function toggleTheme() {
+    const html = document.documentElement;
+    const currentTheme = html.getAttribute('data-theme');
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    
+    html.setAttribute('data-theme', newTheme);
+    localStorage.setItem('theme', newTheme);
+    
+    showNotification(
+        `Switched to ${newTheme} mode`,
+        'info'
+    );
+}
+
+// Load saved theme on page load
+function loadTheme() {
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+}
+
 // Tab switching
 function showTab(tabName) {
     // Hide all tabs
@@ -678,6 +699,9 @@ async function loadHeaderStats() {
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
+    // Load theme preference
+    loadTheme();
+    
     // Load header stats immediately
     loadHeaderStats();
     
