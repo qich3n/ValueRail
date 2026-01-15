@@ -55,3 +55,8 @@ Thumbs.db
 
 # Local data
 data/
+
+# Documentation (keep these in repo)
+# RUNNING.md - Keep this file
+# README.md - Keep this file
+# RESUME_SUMMARY.md - Keep this file
