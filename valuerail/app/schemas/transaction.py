@@ -4,6 +4,9 @@ from datetime import datetime
 from typing import Optional, List
 from pydantic import BaseModel, Field, field_validator
 
+# Maximum transaction amount: $999,999,999.99 (in cents)
+MAX_TRANSACTION_AMOUNT = 99_999_999_999
+
 
 class MintRequest(BaseModel):
     """Schema for minting new value to an account."""
@@ -12,6 +15,7 @@ class MintRequest(BaseModel):
     amount: int = Field(
         ...,
         gt=0,
+        le=MAX_TRANSACTION_AMOUNT,
         description="Amount to mint in smallest units (must be positive)"
     )
     description: Optional[str] = Field(
@@ -24,6 +28,17 @@ class MintRequest(BaseModel):
         max_length=255,
         description="Unique key to ensure idempotent operation"
     )
+    
+    @field_validator("description")
+    @classmethod
+    def sanitize_description(cls, v):
+        """Sanitize description by removing control characters."""
+        if v is None:
+            return v
+        v = v.strip()
+        # Remove control characters but preserve newlines and tabs
+        v = "".join(c for c in v if ord(c) >= 32 or c in "\n\t")
+        return v if v else None
 
 
 class TransferRequest(BaseModel):
@@ -34,6 +49,7 @@ class TransferRequest(BaseModel):
     amount: int = Field(
         ...,
         gt=0,
+        le=MAX_TRANSACTION_AMOUNT,
         description="Amount to transfer in smallest units (must be positive)"
     )
     description: Optional[str] = Field(
@@ -54,6 +70,17 @@ class TransferRequest(BaseModel):
         if "from_account_id" in info.data and v == info.data["from_account_id"]:
             raise ValueError("Cannot transfer to the same account")
         return v
+    
+    @field_validator("description")
+    @classmethod
+    def sanitize_description(cls, v):
+        """Sanitize description by removing control characters."""
+        if v is None:
+            return v
+        v = v.strip()
+        # Remove control characters but preserve newlines and tabs
+        v = "".join(c for c in v if ord(c) >= 32 or c in "\n\t")
+        return v if v else None
 
 
 class TransactionResponse(BaseModel):

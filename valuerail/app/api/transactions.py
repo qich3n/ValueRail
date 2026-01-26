@@ -47,6 +47,8 @@ def mint_value(
     This operation is atomic and recorded in the immutable ledger.
     
     Use an idempotency key to ensure safe retries without double-minting.
+    
+    Rate limited to 60 requests per minute per IP address.
     """
     service = LedgerService(db)
     
@@ -77,6 +79,8 @@ def transfer_value(
     The operation will fail if the source account has insufficient balance.
     
     Use an idempotency key to ensure safe retries without double-spending.
+    
+    Rate limited to 60 requests per minute per IP address.
     
     Error codes:
     - 404: Account not found (source or destination)

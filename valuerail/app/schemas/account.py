@@ -1,7 +1,7 @@
 """Account-related Pydantic schemas."""
 
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class AccountCreate(BaseModel):
@@ -13,6 +13,17 @@ class AccountCreate(BaseModel):
         max_length=255,
         description="Name of the account holder"
     )
+    
+    @field_validator("name")
+    @classmethod
+    def sanitize_name(cls, v):
+        """Sanitize account name by stripping whitespace."""
+        v = v.strip()
+        if not v:
+            raise ValueError("Name cannot be empty or whitespace only")
+        # Basic sanitization: remove control characters
+        v = "".join(c for c in v if ord(c) >= 32 or c in "\n\t")
+        return v
 
 
 class AccountResponse(BaseModel):

@@ -7,6 +7,9 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from app.config import get_settings
 from app.database import init_db
@@ -28,6 +31,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 settings = get_settings()
+
+# Initialize rate limiter
+limiter = Limiter(key_func=get_remote_address)
 
 
 @asynccontextmanager
@@ -75,6 +81,39 @@ app = FastAPI(
     redoc_url="/redoc",
     lifespan=lifespan,
 )
+
+# Add state for limiter
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, lambda request, exc: JSONResponse(
+    status_code=429,
+    content={
+        "error": "rate_limit_exceeded",
+        "message": "Too many requests. Please try again later."
+    }
+))
+
+# Add request size limit middleware (10 MB)
+MAX_REQUEST_SIZE = 10 * 1024 * 1024  # 10 MB
+
+@app.middleware("http")
+async def size_limit_middleware(request: Request, call_next):
+    """Middleware to limit request body size."""
+    if request.method in ("POST", "PUT", "PATCH"):
+        content_length = request.headers.get("content-length")
+        if content_length:
+            try:
+                if int(content_length) > MAX_REQUEST_SIZE:
+                    return JSONResponse(
+                        status_code=413,
+                        content={
+                            "error": "payload_too_large",
+                            "message": f"Request body exceeds maximum size of {MAX_REQUEST_SIZE // 1024 // 1024}MB"
+                        }
+                    )
+            except ValueError:
+                pass
+    
+    return await call_next(request)
 
 # Add CORS middleware
 # Configure via CORS_ORIGINS environment variable (comma-separated)
