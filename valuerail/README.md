@@ -4,6 +4,12 @@ A minimal digital value settlement and ledger system built with FastAPI.
 
 ValueRail simulates how digital dollars (or stablecoins) move between accounts in a safe, atomic, and auditable way. It serves as a simplified model of financial infrastructure, prioritizing correctness, safety, and auditability.
 
+## Documentation
+
+- [RUNNING.md](RUNNING.md) for detailed run options
+- [SECURITY.md](SECURITY.md) for security practices and reporting
+- [SECURITY_QUICK_REFERENCE.md](SECURITY_QUICK_REFERENCE.md) for a concise checklist
+
 ## Features
 
 - **Account Management**: Create and manage accounts with unique identifiers
@@ -179,6 +185,12 @@ curl -X POST http://localhost:8000/api/v1/transactions/transfer \
 
 ```bash
 curl http://localhost:8000/api/v1/accounts/550e8400-e29b-41d4-a716-446655440000/balance
+```
+
+### Health Check
+
+```bash
+curl http://localhost:8000/api/v1/health
 ```
 
 ## Idempotency
