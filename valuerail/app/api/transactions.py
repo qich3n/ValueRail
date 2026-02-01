@@ -16,6 +16,8 @@ from app.services.exceptions import (
     AccountNotFoundError,
     InsufficientBalanceError,
     InvalidTransferError,
+    TransferLimitExceededError,
+    DailyMintLimitExceededError,
 )
 
 router = APIRouter()
@@ -61,6 +63,17 @@ def mint_value(
         )
     except AccountNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except DailyMintLimitExceededError as e:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "daily_mint_limit_exceeded",
+                "message": str(e),
+                "account_id": e.account_id,
+                "requested": e.requested,
+                "remaining": e.remaining
+            }
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     
@@ -98,6 +111,16 @@ def transfer_value(
         )
     except AccountNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except TransferLimitExceededError as e:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "transfer_limit_exceeded",
+                "message": str(e),
+                "amount": e.amount,
+                "maximum": e.maximum
+            }
+        )
     except InsufficientBalanceError as e:
         raise HTTPException(
             status_code=400,

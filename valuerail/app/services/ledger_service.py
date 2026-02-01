@@ -1,16 +1,20 @@
 """Ledger service for minting and transfers with atomic operations."""
 
 import json
+from datetime import datetime, timezone, timedelta
 from typing import Optional, List
 from sqlalchemy.orm import Session
-from sqlalchemy import select, update
+from sqlalchemy import select, update, func
 from sqlalchemy.exc import IntegrityError
 
+from app.config import get_settings
 from app.models import Account, Balance, Transaction, TransactionType, IdempotencyKey
 from app.services.exceptions import (
     AccountNotFoundError,
     InsufficientBalanceError,
     InvalidTransferError,
+    TransferLimitExceededError,
+    DailyMintLimitExceededError,
 )
 
 
@@ -25,6 +29,7 @@ class LedgerService:
     
     def __init__(self, db: Session):
         self.db = db
+        self.settings = get_settings()
     
     def _check_idempotency_key(self, key: str) -> Optional[dict]:
         """
@@ -86,6 +91,24 @@ class LedgerService:
             raise AccountNotFoundError(account_id)
         
         return balance
+
+    def _get_daily_minted_amount(self, account_id: str) -> int:
+        """
+        Get total minted amount for an account for the current UTC day.
+        """
+        now = datetime.now(timezone.utc)
+        start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_of_day = start_of_day + timedelta(days=1)
+
+        total = (
+            self.db.query(func.coalesce(func.sum(Transaction.amount), 0))
+            .filter(Transaction.type == TransactionType.MINT)
+            .filter(Transaction.to_account_id == account_id)
+            .filter(Transaction.created_at >= start_of_day)
+            .filter(Transaction.created_at < end_of_day)
+            .scalar()
+        )
+        return int(total or 0)
     
     def mint(
         self,
@@ -130,6 +153,16 @@ class LedgerService:
                 return self.db.query(Transaction).filter(
                     Transaction.id == existing_response["id"]
                 ).first()
+
+        if self.settings.max_daily_mint_per_account > 0:
+            minted_today = self._get_daily_minted_amount(account_id)
+            remaining = self.settings.max_daily_mint_per_account - minted_today
+            if amount > remaining:
+                raise DailyMintLimitExceededError(
+                    account_id=account_id,
+                    requested=amount,
+                    remaining=max(0, remaining)
+                )
         
         # Lock and update the balance
         balance = self._get_balance_for_update(account_id)
@@ -212,6 +245,12 @@ class LedgerService:
                 return self.db.query(Transaction).filter(
                     Transaction.id == existing_response["id"]
                 ).first()
+
+        if self.settings.max_transfer_amount > 0 and amount > self.settings.max_transfer_amount:
+            raise TransferLimitExceededError(
+                amount=amount,
+                maximum=self.settings.max_transfer_amount
+            )
         
         # Lock balances in a consistent order to prevent deadlocks
         # Always lock the lower ID first

@@ -240,6 +240,8 @@ Configure the application using environment variables or a `.env` file:
 | `DEBUG` | `false` | Enable debug mode |
 | `APP_NAME` | `ValueRail` | Application name |
 | `APP_VERSION` | `1.0.0` | Application version |
+| `MAX_TRANSFER_AMOUNT` | `100000` | Maximum allowed transfer amount (0 disables) |
+| `MAX_DAILY_MINT_PER_ACCOUNT` | `250000` | Maximum total mint per account per UTC day (0 disables) |
 
 ### PostgreSQL Connection String
 

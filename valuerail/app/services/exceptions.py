@@ -49,3 +49,27 @@ class IdempotencyKeyExistsError(ValueRailError):
         self.key = key
         self.response = response
         super().__init__(f"Idempotency key already exists: {key}")
+
+
+class TransferLimitExceededError(ValueRailError):
+    """Raised when a transfer exceeds the configured maximum amount."""
+
+    def __init__(self, amount: int, maximum: int):
+        self.amount = amount
+        self.maximum = maximum
+        super().__init__(
+            f"Transfer amount {amount} exceeds maximum allowed {maximum}"
+        )
+
+
+class DailyMintLimitExceededError(ValueRailError):
+    """Raised when an account exceeds the daily mint limit."""
+
+    def __init__(self, account_id: str, requested: int, remaining: int):
+        self.account_id = account_id
+        self.requested = requested
+        self.remaining = remaining
+        super().__init__(
+            f"Daily mint limit exceeded for account {account_id}: "
+            f"requested={requested}, remaining={remaining}"
+        )

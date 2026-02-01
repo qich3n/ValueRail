@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     
     # Database settings
     database_url: str = "sqlite:///./valuerail.db"
+
+    # Soft limits (set to 0 to disable)
+    max_transfer_amount: int = 100000
+    max_daily_mint_per_account: int = 250000
     
     # For PostgreSQL, use:
     # database_url: str = "postgresql://user:password@localhost:5432/valuerail"
