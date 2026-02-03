@@ -37,7 +37,7 @@ limiter = Limiter(key_func=get_remote_address)
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(_app: FastAPI):
     """Lifespan context manager for startup/shutdown events."""
     # Startup: Initialize database
     logger.info("Starting ValueRail application...")
@@ -45,7 +45,7 @@ async def lifespan(app: FastAPI):
         init_db()
         logger.info("Database initialized successfully")
     except Exception as e:
-        logger.error(f"Failed to initialize database: {e}", exc_info=True)
+        logger.error("Failed to initialize database: %s", e, exc_info=True)
         raise
     yield
     # Shutdown: cleanup if needed
@@ -130,9 +130,9 @@ app.add_middleware(
 
 # Custom exception handlers for ValueRail errors
 @app.exception_handler(AccountNotFoundError)
-async def account_not_found_handler(request: Request, exc: AccountNotFoundError):
+async def account_not_found_handler(_request: Request, exc: AccountNotFoundError):
     """Handle account not found errors."""
-    logger.warning(f"Account not found: {exc.account_id}")
+    logger.warning("Account not found: %s", exc.account_id)
     return JSONResponse(
         status_code=404,
         content={
@@ -144,11 +144,13 @@ async def account_not_found_handler(request: Request, exc: AccountNotFoundError)
 
 
 @app.exception_handler(InsufficientBalanceError)
-async def insufficient_balance_handler(request: Request, exc: InsufficientBalanceError):
+async def insufficient_balance_handler(_request: Request, exc: InsufficientBalanceError):
     """Handle insufficient balance errors."""
     logger.warning(
-        f"Insufficient balance: account={exc.account_id}, "
-        f"available={exc.available}, required={exc.required}"
+        "Insufficient balance: account=%s, available=%s, required=%s",
+        exc.account_id,
+        exc.available,
+        exc.required
     )
     return JSONResponse(
         status_code=400,
@@ -163,9 +165,9 @@ async def insufficient_balance_handler(request: Request, exc: InsufficientBalanc
 
 
 @app.exception_handler(InvalidTransferError)
-async def invalid_transfer_handler(request: Request, exc: InvalidTransferError):
+async def invalid_transfer_handler(_request: Request, exc: InvalidTransferError):
     """Handle invalid transfer errors."""
-    logger.warning(f"Invalid transfer: {str(exc)}")
+    logger.warning("Invalid transfer: %s", str(exc))
     return JSONResponse(
         status_code=400,
         content={
@@ -176,9 +178,9 @@ async def invalid_transfer_handler(request: Request, exc: InvalidTransferError):
 
 
 @app.exception_handler(DuplicateAccountError)
-async def duplicate_account_handler(request: Request, exc: DuplicateAccountError):
+async def duplicate_account_handler(_request: Request, exc: DuplicateAccountError):
     """Handle duplicate account errors."""
-    logger.warning(f"Duplicate account: {exc.account_id}")
+    logger.warning("Duplicate account: %s", exc.account_id)
     return JSONResponse(
         status_code=409,
         content={
@@ -190,9 +192,9 @@ async def duplicate_account_handler(request: Request, exc: DuplicateAccountError
 
 
 @app.exception_handler(IdempotencyKeyExistsError)
-async def idempotency_key_exists_handler(request: Request, exc: IdempotencyKeyExistsError):
+async def idempotency_key_exists_handler(_request: Request, exc: IdempotencyKeyExistsError):
     """Handle idempotency key already exists errors."""
-    logger.info(f"Idempotency key already exists: {exc.key}")
+    logger.info("Idempotency key already exists: %s", exc.key)
     # Return the cached response with 200 status
     import json
     try:
@@ -210,9 +212,9 @@ async def idempotency_key_exists_handler(request: Request, exc: IdempotencyKeyEx
 
 
 @app.exception_handler(ValueRailError)
-async def valuerail_error_handler(request: Request, exc: ValueRailError):
+async def valuerail_error_handler(_request: Request, exc: ValueRailError):
     """Handle generic ValueRail errors."""
-    logger.error(f"ValueRail error: {str(exc)}", exc_info=True)
+    logger.error("ValueRail error: %s", str(exc), exc_info=True)
     return JSONResponse(
         status_code=400,
         content={
@@ -226,7 +228,9 @@ async def valuerail_error_handler(request: Request, exc: ValueRailError):
 async def global_exception_handler(request: Request, exc: Exception):
     """Global exception handler for unhandled errors."""
     logger.error(
-        f"Unhandled exception: {type(exc).__name__}: {str(exc)}",
+        "Unhandled exception: %s: %s",
+        type(exc).__name__,
+        str(exc),
         exc_info=True,
         extra={"path": request.url.path, "method": request.method}
     )
@@ -247,9 +251,9 @@ try:
     static_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")
     if os.path.exists(static_dir):
         app.mount("/static", StaticFiles(directory=static_dir), name="static")
-        logger.info(f"Serving static files from {static_dir}")
+        logger.info("Serving static files from %s", static_dir)
 except Exception as e:
-    logger.warning(f"Could not mount static files: {e}")
+    logger.warning("Could not mount static files: %s", e)
 
 # Root endpoint - serve frontend if available
 @app.get("/")

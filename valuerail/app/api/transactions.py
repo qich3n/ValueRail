@@ -1,6 +1,6 @@
 """Transaction API endpoints (mint and transfer)."""
 
-from typing import Optional, List
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
@@ -62,7 +62,7 @@ def mint_value(
             idempotency_key=request.idempotency_key
         )
     except AccountNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except DailyMintLimitExceededError as e:
         raise HTTPException(
             status_code=400,
@@ -73,9 +73,9 @@ def mint_value(
                 "requested": e.requested,
                 "remaining": e.remaining
             }
-        )
+        ) from e
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     
     return _transaction_to_response(transaction)
 
@@ -110,7 +110,7 @@ def transfer_value(
             idempotency_key=request.idempotency_key
         )
     except AccountNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except TransferLimitExceededError as e:
         raise HTTPException(
             status_code=400,
@@ -120,7 +120,7 @@ def transfer_value(
                 "amount": e.amount,
                 "maximum": e.maximum
             }
-        )
+        ) from e
     except InsufficientBalanceError as e:
         raise HTTPException(
             status_code=400,
@@ -131,11 +131,11 @@ def transfer_value(
                 "available": e.available,
                 "required": e.required
             }
-        )
+        ) from e
     except InvalidTransferError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     
     return _transaction_to_response(transaction)
 

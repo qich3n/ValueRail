@@ -4,11 +4,10 @@ import json
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List
 from sqlalchemy.orm import Session
-from sqlalchemy import select, update, func
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func
 
 from app.config import get_settings
-from app.models import Account, Balance, Transaction, TransactionType, IdempotencyKey
+from app.models import Balance, Transaction, TransactionType, IdempotencyKey
 from app.services.exceptions import (
     AccountNotFoundError,
     InsufficientBalanceError,

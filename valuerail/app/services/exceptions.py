@@ -3,7 +3,6 @@
 
 class ValueRailError(Exception):
     """Base exception for ValueRail errors."""
-    pass
 
 
 class AccountNotFoundError(ValueRailError):
